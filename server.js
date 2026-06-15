@@ -81,6 +81,90 @@ app.post("/login", async (req, res) => {
   }
 });
 
+app.get("/alunos/:coordenadorId", async (req, res) => {
+
+  try {
+
+    const coordenadorId = req.params.coordenadorId;
+
+    const resultado = await pool.query(
+      `
+      SELECT
+        a.id,
+        u.nome
+      FROM alunos a
+      JOIN usuarios u
+          ON a.usuario_id = u.id
+      WHERE a.coordenador_id = $1
+      ORDER BY u.nome;
+      `,
+      [coordenadorId]
+    );
+
+    res.json(resultado.rows);
+
+  } catch (erro) {
+
+    console.error(erro);
+
+    res.status(500).json({
+      erro: "Erro ao buscar alunos"
+    });
+
+  }
+
+});
+
+app.post("/resultados", async (req, res) => {
+
+    try {
+
+        const dados = req.body;
+
+        for (const aluno of dados) {
+
+            await pool.query(
+                `
+                INSERT INTO resultados_mensais
+                (
+                    aluno_id,
+                    mes,
+                    checkin,
+                    tma,
+                    interacao_matinal,
+                    checkin_8
+                )
+                VALUES
+                ($1,$2,$3,$4,$5,$6)
+                `,
+                [
+                    aluno.aluno_id,
+                    "Abril",
+                    aluno.checkin,
+                    aluno.tma,
+                    aluno.interacao_matinal,
+                    aluno.checkin_8
+                ]
+            );
+
+        }
+
+        res.json({
+            mensagem: "Dados salvos com sucesso"
+        });
+
+    } catch (erro) {
+
+        console.error(erro);
+
+        res.status(500).json({
+            erro: "Erro ao salvar"
+        });
+
+    }
+
+});
+
 // =====================
 // SERVIDOR
 // =====================
