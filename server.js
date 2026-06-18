@@ -139,6 +139,7 @@ app.post("/resultados", async (req, res) => {
                 )
                 VALUES
                 ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                RETURNING *
                 `,
                 [
                     aluno.aluno_id,
@@ -152,6 +153,7 @@ app.post("/resultados", async (req, res) => {
                     aluno.analise_carteira
                 ]
             );
+            console.log(resultado.rows[0]);
 
         }
 
