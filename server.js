@@ -132,10 +132,13 @@ app.post("/resultados", async (req, res) => {
                     checkin,
                     tma,
                     interacao_matinal,
-                    checkin_8
+                    checkin_8,
+                    analise_dados,
+                    olhar_estrategico,
+                    analise_carteira
                 )
                 VALUES
-                ($1,$2,$3,$4,$5,$6)
+                ($1,$2,$3,$4,$5,$6,$7,$8,$9)
                 `,
                 [
                     aluno.aluno_id,
@@ -143,7 +146,10 @@ app.post("/resultados", async (req, res) => {
                     aluno.checkin,
                     aluno.tma,
                     aluno.interacao_matinal,
-                    aluno.checkin_8
+                    aluno.checkin_8,
+                    aluno.analise_dados,
+                    aluno.olhar_estrategico,
+                    aluno.analise_carteira
                 ]
             );
 
