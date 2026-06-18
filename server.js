@@ -123,6 +123,15 @@ app.post("/resultados", async (req, res) => {
 
         for (const aluno of dados) {
 
+          console.log(aluno);
+
+              console.log(
+                "CHECKBOXES:",
+                aluno.analise_dados,
+                aluno.olhar_estrategico,
+                aluno.analise_carteira
+              );
+
             await pool.query(
                 `
                 INSERT INTO resultados_mensais
