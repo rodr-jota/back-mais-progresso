@@ -162,8 +162,6 @@ app.post("/resultados", async (req, res) => {
                     aluno.analise_carteira
                 ]
             );
-            console.log(resultado.rows[0]);
-
         }
 
         res.json({
