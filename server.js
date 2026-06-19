@@ -287,25 +287,25 @@ app.get("/progresso/:alunoId", async (req, res) => {
                 tino1_concluida: tino1Concluida,
                 tino1_analise_valor: tino1Concluida ? "1/1" : "0/1",
                 tino1_analise_largura: tino1Concluida ? 100 : 10,
-                tino1_tip_texto: tino1Concluida ? "Ótimo! Você quantificou os potenciais dos clientes." : "Foque em quantificar os potenciais dos clientes.",
+                tino1_tip_texto: tino1Concluida ? "Foque em quantificar os potenciais dos clientes." : "Foque em quantificar os potenciais dos clientes.",
 
                 // Missão Tino 2
                 tino2_concluida: tino2Concluida,
                 tino2_estrategico_valor: tino2Concluida ? "1/1" : "0/1",
                 tino2_estrategico_largura: tino2Concluida ? 100 : 10,
-                tino2_tip_texto: tino2Concluida ? "Excelente! Resultados quantificados com sucesso." : "Ao executar, lembre-se de quantificar os resultados.",
+                tino2_tip_texto: tino2Concluida ? "Ao executar, lembre-se de quantificar os resultados." : "Ao executar, lembre-se de quantificar os resultados.",
 
                 // Missão Extra 1
                 extra1_concluida: extra1Concluida,
                 extra1_analise_valor: extra1Concluida ? "1/1" : "0/1",
                 extra1_analise_largura: extra1Concluida ? 100 : 10,
-                extra1_tip_texto: extra1Concluida ? "Ótimo! Você focou em quantificar os potenciais dos clientes." : "Foque em quantificar os potenciais dos clientes.",
+                extra1_tip_texto: extra1Concluida ? "Foque em quantificar os potenciais dos clientes." : "Foque em quantificar os potenciais dos clientes.",
 
                 // Missão Extra 2 (criada para atender ao HTML)
                 extra2_concluida: extra2Concluida,
                 extra2_estrategico_valor: extra2Concluida ? "1/1" : "0/1",
                 extra2_estrategico_largura: extra2Concluida ? 100 : 10,
-                extra2_tip_texto: extra2Concluida ? "Excelente! Lembre-se de quantificar." : "Ao executar, lembre-se de quantificar os resultados."
+                extra2_tip_texto: extra2Concluida ? "Ao executar, lembre-se de quantificar os resultados." : "Ao executar, lembre-se de quantificar os resultados."
             }
         });
 
