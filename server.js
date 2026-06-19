@@ -21,6 +21,79 @@ pool.query("SELECT NOW()")
     console.error(err);
   });
 
+function calcularMissoesAbril(aluno) {
+
+    let medalhas = 0;
+
+    // =====================
+    // MISSÃO LIDERANÇA 1
+    // =====================
+
+    const checkin = Number(
+        String(aluno.checkin)
+            .replace("%", "")
+            .replace(",", ".")
+    );
+
+    const tma = Number(aluno.tma);
+
+    const lideranca1 =
+        checkin >= 90 &&
+        tma >= 3.5;
+
+    if (lideranca1) medalhas++;
+
+    // =====================
+    // MISSÃO LIDERANÇA 2
+    // =====================
+
+    const matinal =
+        Number(aluno.interacao_matinal);
+
+    const lideranca2 =
+        matinal >= 1 &&
+        aluno.checkin_8 <= "08:05";
+
+    if (lideranca2) medalhas++;
+
+    // =====================
+    // TINO COMERCIAL 1
+    // =====================
+
+    const tino1 =
+        aluno.analise_dados === true;
+
+    if (tino1) medalhas++;
+
+    // =====================
+    // TINO COMERCIAL 2
+    // =====================
+
+    const tino2 =
+        aluno.olhar_estrategico === true;
+
+    if (tino2) medalhas++;
+
+    // =====================
+    // MEDALHA EXTRA
+    // =====================
+
+    const extra =
+        aluno.analise_carteira === true;
+
+    if (extra) medalhas++;
+
+    return {
+        lideranca1,
+        lideranca2,
+        tino1,
+        tino2,
+        extra,
+        medalhas
+    };
+
+}
+
 // =====================
 // ROTAS
 // =====================
@@ -162,6 +235,23 @@ app.post("/resultados", async (req, res) => {
                     aluno.analise_carteira
                 ]
             );
+            const resultadoMissoes =
+              calcularMissoesAbril(aluno);
+    
+            console.log(resultadoMissoes);
+
+            await pool.query(
+              `
+              UPDATE alunos
+              SET qtd_medalhas =
+                  qtd_medalhas + $1
+              WHERE id = $2
+              `,
+              [
+                  resultadoMissoes.medalhas,
+                  aluno.aluno_id
+              ]
+          );
         }
 
         res.json({
