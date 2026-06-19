@@ -287,36 +287,34 @@ app.post("/resultados", async (req, res) => {
                   aluno.aluno_id
               ]
           );
+          const soma = await pool.query(
+            `
+            SELECT SUM(medalhas_ganhas) AS total
+            FROM progresso_missoes
+            WHERE aluno_id = $1
+            `,
+            [aluno.aluno_id]
+          );
+  
+          const totalMedalhas =
+            Number(soma.rows[0].total || 0);
+          const rank =
+            calcularRank(totalMedalhas);
+            await pool.query(
+              `
+              UPDATE alunos
+              SET
+                  rank_atual = $1,
+                  qtd_medalhas = $2
+              WHERE id = $3
+              `,
+              [
+                  rank,
+                  totalMedalhas,
+                  aluno.aluno_id
+              ]
+            );
         }
-
-        const soma = await pool.query(
-          `
-          SELECT SUM(medalhas_ganhas) AS total
-          FROM progresso_missoes
-          WHERE aluno_id = $1
-          `,
-          [aluno.aluno_id]
-        );
-
-        const totalMedalhas =
-          Number(soma.rows[0].total || 0);
-        const rank =
-          calcularRank(totalMedalhas);
-
-        await pool.query(
-          `
-          UPDATE alunos
-          SET
-              rank_atual = $1,
-              qtd_medalhas = $2
-          WHERE id = $3
-          `,
-          [
-              rank,
-              totalMedalhas,
-              aluno.aluno_id
-          ]
-        );
 
         res.json({
             mensagem: "Dados salvos com sucesso"
