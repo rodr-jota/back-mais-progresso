@@ -407,6 +407,62 @@ app.get("/progresso/:alunoId", async (req, res) => {
 
 });
 
+app.get("/progresso/:alunoId", async (req, res) => {
+
+    try {
+
+        const alunoId = req.params.alunoId;
+
+        // Dados do aluno
+        const aluno = await pool.query(
+            `
+            SELECT
+                rank_atual,
+                qtd_medalhas
+            FROM alunos
+            WHERE id = $1
+            `,
+            [alunoId]
+        );
+
+        // Missões
+        const progresso = await pool.query(
+            `
+            SELECT *
+            FROM progresso_missoes
+            WHERE aluno_id = $1
+            `,
+            [alunoId]
+        );
+
+        // Resultados
+        const resultados = await pool.query(
+            `
+            SELECT *
+            FROM resultados_mensais
+            WHERE aluno_id = $1
+            `,
+            [alunoId]
+        );
+
+        res.json({
+            aluno: aluno.rows[0],
+            progresso: progresso.rows,
+            resultados: resultados.rows
+        });
+
+    } catch (erro) {
+
+        console.error(erro);
+
+        res.status(500).json({
+            erro: "Erro ao buscar progresso"
+        });
+
+    }
+
+});
+
 // =====================
 // SERVIDOR
 // =====================
