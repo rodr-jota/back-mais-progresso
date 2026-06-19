@@ -195,16 +195,6 @@ app.post("/resultados", async (req, res) => {
         const dados = req.body;
 
         for (const aluno of dados) {
-
-          console.log(aluno);
-
-              console.log(
-                "CHECKBOXES:",
-                aluno.analise_dados,
-                aluno.olhar_estrategico,
-                aluno.analise_carteira
-              );
-
             await pool.query(
                 `
                 INSERT INTO resultados_mensais
@@ -238,7 +228,33 @@ app.post("/resultados", async (req, res) => {
             const resultadoMissoes =
               calcularMissoesAbril(aluno);
     
-            console.log(resultadoMissoes);
+            await pool.query(
+              `
+              INSERT INTO progresso_missoes
+              (
+                  aluno_id,
+                  mes,
+                  lideranca1,
+                  lideranca2,
+                  tino1,
+                  tino2,
+                  extra1,
+                  medalhas_ganhas
+              )
+              VALUES
+              ($1,$2,$3,$4,$5,$6,$7,$8)
+              `,
+              [
+                  aluno.aluno_id,
+                  "Abril",
+                  resultadoMissoes.lideranca1,
+                  resultadoMissoes.lideranca2,
+                  resultadoMissoes.tino1,
+                  resultadoMissoes.tino2,
+                  resultadoMissoes.extra,
+                  resultadoMissoes.medalhas
+              ]
+            );
 
             await pool.query(
               `
