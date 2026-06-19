@@ -131,15 +131,6 @@ app.get("/", (req, res) => {
   res.send("Servidor funcionando");
 });
 
-// Lista de alunos
-app.get("/alunos", (req, res) => {
-  const alunos = [
-    { id: 1, nome: "João" },
-    { id: 2, nome: "Maria" }
-  ];
-
-  res.json(alunos);
-});
 
 // LOGIN (VERSÃO DE TESTE)
 app.post("/login", async (req, res) => {
