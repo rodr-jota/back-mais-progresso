@@ -151,6 +151,25 @@ app.post("/login", async (req, res) => {
 
     const usuario = resultado.rows[0];
 
+    let alunoId = null;
+
+    if (usuario.perfil === "aluno") {
+
+        const aluno = await pool.query(
+            `
+            SELECT id
+            FROM alunos
+            WHERE usuario_id = $1
+            `,
+            [usuario.id]
+        );
+
+        if (aluno.rows.length > 0) {
+            alunoId = aluno.rows[0].id;
+        }
+
+    }
+
     if (usuario.senha !== senha) {
       return res.status(401).json({
         erro: "Senha incorreta"
@@ -159,6 +178,7 @@ app.post("/login", async (req, res) => {
 
     res.json({
       id: usuario.id,
+      aluno_id: alunoId,
       nome: usuario.nome,
       perfil: usuario.perfil,
       time: usuario.time
@@ -326,6 +346,61 @@ app.post("/resultados", async (req, res) => {
 
         res.status(500).json({
             erro: "Erro ao salvar"
+        });
+
+    }
+
+});
+
+app.get("/progresso/:alunoId", async (req, res) => {
+
+    try {
+
+        const alunoId = req.params.alunoId;
+
+        const aluno = await pool.query(
+            `
+            SELECT
+                rank_atual,
+                qtd_medalhas
+            FROM alunos
+            WHERE id = $1
+            `,
+            [alunoId]
+        );
+
+        const progresso = await pool.query(
+            `
+            SELECT *
+            FROM progresso_missoes
+            WHERE aluno_id = $1
+            AND mes = 'Abril'
+            `,
+            [alunoId]
+        );
+
+        const resultados = await pool.query(
+            `
+            SELECT *
+            FROM resultados_mensais
+            WHERE aluno_id = $1
+            AND mes = 'Abril'
+            `,
+            [alunoId]
+        );
+
+        res.json({
+            aluno: aluno.rows[0],
+            progresso: progresso.rows[0],
+            resultados: resultados.rows[0]
+        });
+
+    } catch (erro) {
+
+        console.error(erro);
+
+        res.status(500).json({
+            erro: "Erro ao buscar progresso"
         });
 
     }
