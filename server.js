@@ -467,6 +467,103 @@ app.get("/progresso/:alunoId", async (req, res) => {
 });
 
 // =====================
+// ROTA: USAR MEDALHA EXTRA
+// =====================
+app.post("/usar-medalha-extra", async (req, res) => {
+  try {
+    const { aluno_id } = req.body;
+
+    if (!aluno_id) {
+      return res.status(400).json({ erro: "ID do aluno não fornecido" });
+    }
+
+    // 1. Calcular medalhas extras ganhas (pela sua coluna real: medalhas_ganhas)
+    const ganhas = await pool.query(
+      `
+      SELECT
+        COALESCE(SUM(medalhas_ganhas), 0) AS total
+      FROM progresso_missoes
+      WHERE aluno_id = $1
+      `,
+      [aluno_id]
+    );
+
+    // 2. Calcular medalhas extras utilizadas
+    const usadas = await pool.query(
+      `
+      SELECT
+        COALESCE(SUM(quantidade), 0) AS total
+      FROM medalhas_extras_utilizadas
+      WHERE aluno_id = $1
+      `,
+      [aluno_id]
+    );
+
+    // 3. Calcular saldo
+    const saldo =
+      Number(ganhas.rows[0].total) -
+      Number(usadas.rows[0].total);
+
+    // 4. Verificar saldo
+    if (saldo <= 0) {
+      return res.status(400).json({
+        erro: "Sem medalhas extras disponíveis"
+      });
+    }
+
+    // 5. Registrar utilização
+    await pool.query(
+      `
+      INSERT INTO medalhas_extras_utilizadas (aluno_id, quantidade)
+      VALUES ($1, $2)
+      `,
+      [aluno_id, 1]
+    );
+
+    // 6. Buscar situação atual do aluno
+    const alunoAtual = await pool.query(
+      `
+      SELECT qtd_medalhas
+      FROM alunos
+      WHERE id = $1
+      `,
+      [aluno_id]
+    );
+
+    // 7. Adicionar a medalha ao progresso (somar 1)
+    const totalMedalhas =
+      Number(alunoAtual.rows[0].qtd_medalhas) + 1;
+
+    // 8. Recalcular rank (usando a sua função original que divide por 4)
+    const rank = calcularRank(totalMedalhas);
+
+    // 9. Atualizar o aluno
+    await pool.query(
+      `
+      UPDATE alunos
+      SET
+        rank_atual = $1,
+        qtd_medalhas = $2
+      WHERE id = $3
+      `,
+      [rank, totalMedalhas, aluno_id]
+    );
+
+    // 10. Resposta final
+    res.json({
+      mensagem: "Medalha utilizada com sucesso",
+      saldo_restante: saldo - 1
+    });
+
+  } catch (erro) {
+    console.error("Erro ao usar medalha extra:", erro);
+    res.status(500).json({
+      erro: "Erro interno ao processar o uso da medalha extra"
+    });
+  }
+});
+
+// =====================
 // SERVIDOR
 // =====================
 const PORT = process.env.PORT || 3000;
