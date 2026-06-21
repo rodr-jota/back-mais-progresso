@@ -267,7 +267,7 @@ app.post("/resultados", async (req, res) => {
             const resultadoMissoes =
               calcularMissoesAbril(aluno);
     
-            await pool.query(
+                        await pool.query(
               `
               INSERT INTO progresso_missoes
               (
@@ -278,7 +278,7 @@ app.post("/resultados", async (req, res) => {
                   tino1,
                   tino2,
                   extra1,
-                  medalhas_ganhas,
+                  medalhas_ganhas
               )
               VALUES
               ($1,$2,$3,$4,$5,$6,$7,$8)
