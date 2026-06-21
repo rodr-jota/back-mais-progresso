@@ -279,10 +279,9 @@ app.post("/resultados", async (req, res) => {
                   tino2,
                   extra1,
                   medalhas_ganhas,
-                  medalhas_extra_ganhas
               )
               VALUES
-              ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+              ($1,$2,$3,$4,$5,$6,$7,$8)
               `,
               [
                   aluno.aluno_id,
