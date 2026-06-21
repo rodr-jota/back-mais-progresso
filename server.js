@@ -548,6 +548,55 @@ app.post("/usar-medalha-extra", async (req, res) => {
 });
 
 // =====================
+// ROTA: ESTATÍSTICAS DO COORDENADOR
+// =====================
+app.get("/coordenador/stats/:coordenadorId", async (req, res) => {
+  try {
+    const coordenadorId = req.params.coordenadorId;
+
+    // 1. Contar total de alunos do time
+    const totalQuery = await pool.query(
+      `SELECT COUNT(*) as total FROM alunos WHERE coordenador_id = $1`,
+      [coordenadorId]
+    );
+    const totalAlunos = Number(totalQuery.rows[0].total);
+
+    // 2. Contar quantos alunos em cada rank
+    const ranksQuery = await pool.query(
+      `
+      SELECT rank_atual, COUNT(*) as quantidade
+      FROM alunos
+      WHERE coordenador_id = $1
+      GROUP BY rank_atual
+      `,
+      [coordenadorId]
+    );
+
+    // Inicializa a distribuição zerada para todos os ranks
+    const ranks = ["Bronze", "Prata", "Ouro", "Platina", "Diamante", "Mestre", "Lendário"];
+    let distribuicao = {};
+    ranks.forEach(r => distribuicao[r] = 0);
+
+    // Preenche com os dados reais
+    ranksQuery.rows.forEach(row => {
+      if (distribuicao.hasOwnProperty(row.rank_atual)) {
+        distribuicao[row.rank_atual] = Number(row.quantidade);
+      }
+    });
+
+    res.json({
+      total_alunos: totalAlunos,
+      distribuicao: distribuicao
+    });
+
+  } catch (erro) {
+    console.error("Erro ao buscar stats:", erro);
+    res.status(500).json({ erro: "Erro ao buscar estatísticas" });
+  }
+});
+
+
+// =====================
 // SERVIDOR
 // =====================
 const PORT = process.env.PORT || 3000;
