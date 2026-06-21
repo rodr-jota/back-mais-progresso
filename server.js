@@ -117,7 +117,8 @@ function calcularMissoesAbril(aluno) {
         tino1,
         tino2,
         extra,
-        medalhas
+        medalhas,
+        medalhasExtra
     };
 
 }
@@ -278,10 +279,11 @@ app.post("/resultados", async (req, res) => {
                   tino1,
                   tino2,
                   extra1,
-                  medalhas_ganhas
+                  medalhas_ganhas,
+                  medalhas_extra_ganhas
               )
               VALUES
-              ($1,$2,$3,$4,$5,$6,$7,$8)
+              ($1,$2,$3,$4,$5,$6,$7,$8,$9)
               `,
               [
                   aluno.aluno_id,
@@ -304,6 +306,7 @@ app.post("/resultados", async (req, res) => {
               `,
               [
                   resultadoMissoes.medalhas,
+                  resultadoMissoes.medalhasExtra,
                   aluno.aluno_id
               ]
           );
