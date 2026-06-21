@@ -554,39 +554,41 @@ app.get("/coordenador/stats/:coordenadorId", async (req, res) => {
   try {
     const coordenadorId = req.params.coordenadorId;
 
-    // 1. Contar total de alunos do time
+    // 1. Contar total de alunos do time (Isso vira o "Y" ou o objetivo máximo)
     const totalQuery = await pool.query(
       `SELECT COUNT(*) as total FROM alunos WHERE coordenador_id = $1`,
       [coordenadorId]
     );
     const totalAlunos = Number(totalQuery.rows[0].total);
 
-    // 2. Contar quantos alunos em cada rank
-    const ranksQuery = await pool.query(
+    // 2. Buscar todos os alunos do time com seus ranks e medalhas
+    const alunosQuery = await pool.query(
       `
-      SELECT rank_atual, COUNT(*) as quantidade
+      SELECT id, rank_atual, qtd_medalhas
       FROM alunos
       WHERE coordenador_id = $1
-      GROUP BY rank_atual
       `,
       [coordenadorId]
     );
 
-    // Inicializa a distribuição zerada para todos os ranks
+    // 3. Calcular quantas medalhas o time tem em cada rank
+    // Bronze: Soma de medalhas de todos que estão no Bronze
+    // Prata: Soma de medalhas de todos que estão no Prata
+    // etc.
     const ranks = ["Bronze", "Prata", "Ouro", "Platina", "Diamante", "Mestre", "Lendário"];
-    let distribuicao = {};
-    ranks.forEach(r => distribuicao[r] = 0);
+    let medalhasPorRank = {};
+    ranks.forEach(r => medalhasPorRank[r] = 0);
 
-    // Preenche com os dados reais
-    ranksQuery.rows.forEach(row => {
-      if (distribuicao.hasOwnProperty(row.rank_atual)) {
-        distribuicao[row.rank_atual] = Number(row.quantidade);
+    alunosQuery.rows.forEach(aluno => {
+      const rank = aluno.rank_atual || "Bronze";
+      if (medalhasPorRank.hasOwnProperty(rank)) {
+        medalhasPorRank[rank] += Number(aluno.qtd_medalhas || 0);
       }
     });
 
     res.json({
-      total_alunos: totalAlunos,
-      distribuicao: distribuicao
+      total_alunos: totalAlunos, // Objetivo máximo para subir de nível
+      medalhas_por_rank: medalhasPorRank
     });
 
   } catch (erro) {
