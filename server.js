@@ -33,7 +33,7 @@ function calcularRank(totalMedalhas) {
         "Lendário"
     ];
 
-    let indice = Math.floor(totalMedalhas / 4);
+    let indice = Math.floor(totalMedalhas / 3);
 
     if (indice > 6) {
         indice = 6;
@@ -45,7 +45,7 @@ function calcularRank(totalMedalhas) {
 
 function medalhasNoRank(totalMedalhas) {
 
-    return totalMedalhas % 4;
+    return totalMedalhas % 3;
 
 }
 
@@ -518,7 +518,7 @@ app.post("/usar-medalha-extra", async (req, res) => {
     const totalMedalhas =
       Number(alunoAtual.rows[0].qtd_medalhas) + 1;
 
-    // 8. Recalcular rank (usando a sua função original que divide por 4)
+    // 8. Recalcular rank (usando a sua função original que divide por 3)
     const rank = calcularRank(totalMedalhas);
 
     // 9. Atualizar o aluno
