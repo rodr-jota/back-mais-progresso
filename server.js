@@ -296,20 +296,6 @@ app.post("/resultados", async (req, res) => {
                   resultadoMissoes.medalhas
               ]
             );
-
-            await pool.query(
-              `
-              UPDATE alunos
-              SET qtd_medalhas =
-                  qtd_medalhas + $1
-              WHERE id = $2
-              `,
-              [
-                  resultadoMissoes.medalhas,
-                  resultadoMissoes.medalhasExtra,
-                  aluno.aluno_id
-              ]
-          );
           const soma = await pool.query(
             `
             SELECT SUM(medalhas_ganhas) AS total
