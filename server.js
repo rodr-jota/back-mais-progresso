@@ -117,8 +117,7 @@ function calcularMissoesAbril(aluno) {
         tino1,
         tino2,
         extra,
-        medalhas,
-        medalhasExtra
+        medalhas
     };
 
 }
