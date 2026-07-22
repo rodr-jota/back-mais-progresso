@@ -500,28 +500,33 @@ app.post("/usar-medalha-extra", async (req, res) => {
 app.get("/coordenador/stats/:coordenadorId", async (req, res) => {
   try {
     const coordenadorId = req.params.coordenadorId;
+    const timeFiltro = req.query.time || "Geral"; // Pega o parâmetro ?time=... da URL
 
-    // 1. Contar total de alunos do time (Isso vira o "Y" ou o objetivo máximo)
+    let queryAlunos = "";
+    let params = [];
+
+    // Lógica para montar a query SQL dependendo do filtro
+    if (timeFiltro === "Geral" || timeFiltro === "") {
+      // Se for Geral, busca TODOS os alunos do banco (independente do coordenador)
+      queryAlunos = `SELECT id, rank_atual, qtd_medalhas, time FROM alunos`;
+      params = []; // Não precisa de parâmetros
+    } else {
+      // Se for um time específico, busca apenas os alunos daquele time (independente do coordenador)
+      queryAlunos = `SELECT id, rank_atual, qtd_medalhas, time FROM alunos WHERE time = $1`;
+      params = [timeFiltro];
+    }
+
+    // 1. Contar total de alunos filtrados (Isso define o "Y" do slider e do gráfico)
     const totalQuery = await pool.query(
-      `SELECT COUNT(*) as total FROM alunos WHERE coordenador_id = $1`,
-      [coordenadorId],
+      `SELECT COUNT(*) as total FROM (${queryAlunos}) AS subquery`,
+      params,
     );
     const totalAlunos = Number(totalQuery.rows[0].total);
 
-    // 2. Buscar todos os alunos do time com seus ranks e medalhas
-    const alunosQuery = await pool.query(
-      `
-      SELECT id, rank_atual, qtd_medalhas
-      FROM alunos
-      WHERE coordenador_id = $1
-      `,
-      [coordenadorId],
-    );
+    // 2. Buscar os alunos filtrados com seus ranks e medalhas
+    const alunosQuery = await pool.query(queryAlunos, params);
 
-    // 3. Calcular quantas medalhas o time tem em cada rank
-    // Bronze: Soma de medalhas de todos que estão no Bronze
-    // Prata: Soma de medalhas de todos que estão no Prata
-    // etc.
+    // 3. Calcular quantos alunos estão em cada rank exato
     const ranks = [
       "Bronze",
       "Prata",
@@ -531,19 +536,20 @@ app.get("/coordenador/stats/:coordenadorId", async (req, res) => {
       "Mestre",
       "Lendário",
     ];
-    let medalhasPorRank = {};
-    ranks.forEach((r) => (medalhasPorRank[r] = 0));
+    let ranksExatos = {};
+    ranks.forEach((r) => (ranksExatos[r] = 0));
 
     alunosQuery.rows.forEach((aluno) => {
       const rank = aluno.rank_atual || "Bronze";
-      if (medalhasPorRank.hasOwnProperty(rank)) {
-        medalhasPorRank[rank] += Number(aluno.qtd_medalhas || 0);
+      if (ranksExatos.hasOwnProperty(rank)) {
+        ranksExatos[rank]++;
       }
     });
 
     res.json({
-      total_alunos: totalAlunos, // Objetivo máximo para subir de nível
-      medalhas_por_rank: medalhasPorRank,
+      total_alunos: totalAlunos,
+      ranks_exatos: ranksExatos,
+      time_selecionado: timeFiltro, // Opcional: útil para debug
     });
   } catch (erro) {
     console.error("Erro ao buscar stats:", erro);
