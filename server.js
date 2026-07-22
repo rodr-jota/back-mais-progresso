@@ -11,7 +11,8 @@ app.use(express.json());
 
 // Teste de conexão com banco
 
-pool.query("SELECT NOW()")
+pool
+  .query("SELECT NOW()")
   .then((res) => {
     console.log("Conectado ao PostgreSQL!");
     console.log(res.rows);
@@ -22,104 +23,88 @@ pool.query("SELECT NOW()")
   });
 
 function calcularRank(totalMedalhas) {
+  const ranks = [
+    "Bronze",
+    "Prata",
+    "Ouro",
+    "Platina",
+    "Diamante",
+    "Mestre",
+    "Lendário",
+  ];
 
-    const ranks = [
-        "Bronze",
-        "Prata",
-        "Ouro",
-        "Platina",
-        "Diamante",
-        "Mestre",
-        "Lendário"
-    ];
+  let indice = Math.floor(totalMedalhas / 3);
 
-    let indice = Math.floor(totalMedalhas / 3);
+  if (indice > 6) {
+    indice = 6;
+  }
 
-    if (indice > 6) {
-        indice = 6;
-    }
-
-    return ranks[indice];
-
+  return ranks[indice];
 }
 
 function medalhasNoRank(totalMedalhas) {
-
-    return totalMedalhas % 3;
-
+  return totalMedalhas % 3;
 }
 
 function calcularMissoesAbril(aluno) {
+  let medalhas = 0;
 
-    let medalhas = 0;
+  // =====================
+  // MISSÃO LIDERANÇA 1
+  // =====================
 
-    // =====================
-    // MISSÃO LIDERANÇA 1
-    // =====================
+  const checkin = Number(
+    String(aluno.checkin).replace("%", "").replace(",", "."),
+  );
 
-    const checkin = Number(
-        String(aluno.checkin)
-            .replace("%", "")
-            .replace(",", ".")
-    );
+  const tma = Number(aluno.tma);
 
-    const tma = Number(aluno.tma);
+  const lideranca1 = checkin >= 90 && tma >= 3.5;
 
-    const lideranca1 =
-        checkin >= 90 &&
-        tma >= 3.5;
+  if (lideranca1) medalhas++;
 
-    if (lideranca1) medalhas++;
+  // =====================
+  // MISSÃO LIDERANÇA 2
+  // =====================
 
-    // =====================
-    // MISSÃO LIDERANÇA 2
-    // =====================
+  const matinal = Number(aluno.interacao_matinal);
 
-    const matinal =
-        Number(aluno.interacao_matinal);
+  const lideranca2 = matinal >= 1 && aluno.checkin_8 <= "08:05";
 
-    const lideranca2 =
-        matinal >= 1 &&
-        aluno.checkin_8 <= "08:05";
+  if (lideranca2) medalhas++;
 
-    if (lideranca2) medalhas++;
+  // =====================
+  // TINO COMERCIAL 1
+  // =====================
 
-    // =====================
-    // TINO COMERCIAL 1
-    // =====================
+  const tino1 = aluno.analise_dados === true;
 
-    const tino1 =
-        aluno.analise_dados === true;
+  if (tino1) medalhas++;
 
-    if (tino1) medalhas++;
+  // =====================
+  // TINO COMERCIAL 2
+  // =====================
 
-    // =====================
-    // TINO COMERCIAL 2
-    // =====================
+  const tino2 = aluno.olhar_estrategico === true;
 
-    const tino2 =
-        aluno.olhar_estrategico === true;
+  if (tino2) medalhas++;
 
-    if (tino2) medalhas++;
+  // =====================
+  // MEDALHA EXTRA
+  // =====================
 
-    // =====================
-    // MEDALHA EXTRA
-    // =====================
+  const extra = aluno.analise_carteira === true;
 
-    const extra =
-        aluno.analise_carteira === true;
+  if (extra) medalhas++;
 
-    if (extra) medalhas++;
-
-    return {
-        lideranca1,
-        lideranca2,
-        tino1,
-        tino2,
-        extra,
-        medalhas
-    };
-
+  return {
+    lideranca1,
+    lideranca2,
+    tino1,
+    tino2,
+    extra,
+    medalhas,
+  };
 }
 
 // =====================
@@ -131,21 +116,19 @@ app.get("/", (req, res) => {
   res.send("Servidor funcionando");
 });
 
-
 // LOGIN (VERSÃO DE TESTE)
 app.post("/login", async (req, res) => {
   try {
-
     const { email, senha } = req.body;
 
     const resultado = await pool.query(
       "SELECT * FROM usuarios WHERE email = $1",
-      [email]
+      [email],
     );
 
     if (resultado.rows.length === 0) {
       return res.status(401).json({
-        erro: "Usuário não encontrado"
+        erro: "Usuário não encontrado",
       });
     }
 
@@ -154,25 +137,23 @@ app.post("/login", async (req, res) => {
     let alunoId = null;
 
     if (usuario.perfil === "aluno") {
-
-        const aluno = await pool.query(
-            `
+      const aluno = await pool.query(
+        `
             SELECT id
             FROM alunos
             WHERE usuario_id = $1
             `,
-            [usuario.id]
-        );
+        [usuario.id],
+      );
 
-        if (aluno.rows.length > 0) {
-            alunoId = aluno.rows[0].id;
-        }
-
+      if (aluno.rows.length > 0) {
+        alunoId = aluno.rows[0].id;
+      }
     }
 
     if (usuario.senha !== senha) {
       return res.status(401).json({
-        erro: "Senha incorreta"
+        erro: "Senha incorreta",
       });
     }
 
@@ -181,61 +162,54 @@ app.post("/login", async (req, res) => {
       aluno_id: alunoId,
       nome: usuario.nome,
       perfil: usuario.perfil,
-      time: usuario.time
+      time: usuario.time,
     });
-
   } catch (erro) {
     console.error(erro);
 
     res.status(500).json({
-      erro: "Erro interno do servidor"
+      erro: "Erro interno do servidor",
     });
   }
 });
 
 app.get("/alunos/:coordenadorId", async (req, res) => {
-
   try {
-
     const coordenadorId = req.params.coordenadorId;
 
     const resultado = await pool.query(
       `
       SELECT
         a.id,
-        u.nome
+        u.nome,
+        a.rank_atual,
+        a.qtd_medalhas
       FROM alunos a
       JOIN usuarios u
           ON a.usuario_id = u.id
       WHERE a.coordenador_id = $1
       ORDER BY u.nome;
       `,
-      [coordenadorId]
+      [coordenadorId],
     );
 
     res.json(resultado.rows);
-
   } catch (erro) {
-
     console.error(erro);
 
     res.status(500).json({
-      erro: "Erro ao buscar alunos"
+      erro: "Erro ao buscar alunos",
     });
-
   }
-
 });
 
 app.post("/resultados", async (req, res) => {
+  try {
+    const dados = req.body;
 
-    try {
-
-        const dados = req.body;
-
-        for (const aluno of dados) {
-            await pool.query(
-                `
+    for (const aluno of dados) {
+      await pool.query(
+        `
                 INSERT INTO resultados_mensais
                 (
                     aluno_id,
@@ -252,23 +226,22 @@ app.post("/resultados", async (req, res) => {
                 ($1,$2,$3,$4,$5,$6,$7,$8,$9)
                 RETURNING *
                 `,
-                [
-                    aluno.aluno_id,
-                    "Abril",
-                    aluno.checkin,
-                    aluno.tma,
-                    aluno.interacao_matinal,
-                    aluno.checkin_8,
-                    aluno.analise_dados,
-                    aluno.olhar_estrategico,
-                    aluno.analise_carteira
-                ]
-            );
-            const resultadoMissoes =
-              calcularMissoesAbril(aluno);
-    
-                        await pool.query(
-              `
+        [
+          aluno.aluno_id,
+          "Abril",
+          aluno.checkin,
+          aluno.tma,
+          aluno.interacao_matinal,
+          aluno.checkin_8,
+          aluno.analise_dados,
+          aluno.olhar_estrategico,
+          aluno.analise_carteira,
+        ],
+      );
+      const resultadoMissoes = calcularMissoesAbril(aluno);
+
+      await pool.query(
+        `
               INSERT INTO progresso_missoes
               (
                   aluno_id,
@@ -283,171 +256,149 @@ app.post("/resultados", async (req, res) => {
               VALUES
               ($1,$2,$3,$4,$5,$6,$7,$8)
               `,
-              [
-                  aluno.aluno_id,
-                  "Abril",
-                  resultadoMissoes.lideranca1,
-                  resultadoMissoes.lideranca2,
-                  resultadoMissoes.tino1,
-                  resultadoMissoes.tino2,
-                  resultadoMissoes.extra,
-                  resultadoMissoes.medalhas
-              ]
-            );
-          const soma = await pool.query(
-            `
+        [
+          aluno.aluno_id,
+          "Abril",
+          resultadoMissoes.lideranca1,
+          resultadoMissoes.lideranca2,
+          resultadoMissoes.tino1,
+          resultadoMissoes.tino2,
+          resultadoMissoes.extra,
+          resultadoMissoes.medalhas,
+        ],
+      );
+      const soma = await pool.query(
+        `
             SELECT SUM(medalhas_ganhas) AS total
             FROM progresso_missoes
             WHERE aluno_id = $1
             `,
-            [aluno.aluno_id]
-          );
-  
-          const totalMedalhas =
-            Number(soma.rows[0].total || 0);
-          const rank =
-            calcularRank(totalMedalhas);
-            await pool.query(
-              `
+        [aluno.aluno_id],
+      );
+
+      const totalMedalhas = Number(soma.rows[0].total || 0);
+      const rank = calcularRank(totalMedalhas);
+      await pool.query(
+        `
               UPDATE alunos
               SET
                   rank_atual = $1,
                   qtd_medalhas = $2
               WHERE id = $3
               `,
-              [
-                  rank,
-                  totalMedalhas,
-                  aluno.aluno_id
-              ]
-            );
-        }
-
-        res.json({
-            mensagem: "Dados salvos com sucesso"
-        });
-
-    } catch (erro) {
-
-        console.error(erro);
-
-        res.status(500).json({
-            erro: "Erro ao salvar"
-        });
-
+        [rank, totalMedalhas, aluno.aluno_id],
+      );
     }
 
+    res.json({
+      mensagem: "Dados salvos com sucesso",
+    });
+  } catch (erro) {
+    console.error(erro);
+
+    res.status(500).json({
+      erro: "Erro ao salvar",
+    });
+  }
 });
 
 app.get("/progresso/:alunoId", async (req, res) => {
+  try {
+    const alunoId = req.params.alunoId;
 
-    try {
-
-        const alunoId = req.params.alunoId;
-
-        const aluno = await pool.query(
-            `
+    const aluno = await pool.query(
+      `
             SELECT
                 rank_atual,
                 qtd_medalhas
             FROM alunos
             WHERE id = $1
             `,
-            [alunoId]
-        );
+      [alunoId],
+    );
 
-        const progresso = await pool.query(
-            `
+    const progresso = await pool.query(
+      `
             SELECT *
             FROM progresso_missoes
             WHERE aluno_id = $1
             AND mes = 'Abril'
             `,
-            [alunoId]
-        );
+      [alunoId],
+    );
 
-        const resultados = await pool.query(
-            `
+    const resultados = await pool.query(
+      `
             SELECT *
             FROM resultados_mensais
             WHERE aluno_id = $1
             AND mes = 'Abril'
             `,
-            [alunoId]
-        );
+      [alunoId],
+    );
 
-        res.json({
-            aluno: aluno.rows[0],
-            progresso: progresso.rows[0],
-            resultados: resultados.rows[0]
-        });
+    res.json({
+      aluno: aluno.rows[0],
+      progresso: progresso.rows[0],
+      resultados: resultados.rows[0],
+    });
+  } catch (erro) {
+    console.error(erro);
 
-    } catch (erro) {
-
-        console.error(erro);
-
-        res.status(500).json({
-            erro: "Erro ao buscar progresso"
-        });
-
-    }
-
+    res.status(500).json({
+      erro: "Erro ao buscar progresso",
+    });
+  }
 });
 
 app.get("/progresso/:alunoId", async (req, res) => {
+  try {
+    const alunoId = req.params.alunoId;
 
-    try {
-
-        const alunoId = req.params.alunoId;
-
-        // Dados do aluno
-        const aluno = await pool.query(
-            `
+    // Dados do aluno
+    const aluno = await pool.query(
+      `
             SELECT
                 rank_atual,
                 qtd_medalhas
             FROM alunos
             WHERE id = $1
             `,
-            [alunoId]
-        );
+      [alunoId],
+    );
 
-        // Missões
-        const progresso = await pool.query(
-            `
+    // Missões
+    const progresso = await pool.query(
+      `
             SELECT *
             FROM progresso_missoes
             WHERE aluno_id = $1
             `,
-            [alunoId]
-        );
+      [alunoId],
+    );
 
-        // Resultados
-        const resultados = await pool.query(
-            `
+    // Resultados
+    const resultados = await pool.query(
+      `
             SELECT *
             FROM resultados_mensais
             WHERE aluno_id = $1
             `,
-            [alunoId]
-        );
+      [alunoId],
+    );
 
-        res.json({
-            aluno: aluno.rows[0],
-            progresso: progresso.rows,
-            resultados: resultados.rows
-        });
+    res.json({
+      aluno: aluno.rows[0],
+      progresso: progresso.rows,
+      resultados: resultados.rows,
+    });
+  } catch (erro) {
+    console.error(erro);
 
-    } catch (erro) {
-
-        console.error(erro);
-
-        res.status(500).json({
-            erro: "Erro ao buscar progresso"
-        });
-
-    }
-
+    res.status(500).json({
+      erro: "Erro ao buscar progresso",
+    });
+  }
 });
 
 // =====================
@@ -469,7 +420,7 @@ app.post("/usar-medalha-extra", async (req, res) => {
       FROM progresso_missoes
       WHERE aluno_id = $1
       `,
-      [aluno_id]
+      [aluno_id],
     );
 
     // 2. Calcular medalhas extras utilizadas
@@ -480,18 +431,16 @@ app.post("/usar-medalha-extra", async (req, res) => {
       FROM medalhas_extras_utilizadas
       WHERE aluno_id = $1
       `,
-      [aluno_id]
+      [aluno_id],
     );
 
     // 3. Calcular saldo
-    const saldo =
-      Number(ganhas.rows[0].total) -
-      Number(usadas.rows[0].total);
+    const saldo = Number(ganhas.rows[0].total) - Number(usadas.rows[0].total);
 
     // 4. Verificar saldo
     if (saldo <= 0) {
       return res.status(400).json({
-        erro: "Sem medalhas extras disponíveis"
+        erro: "Sem medalhas extras disponíveis",
       });
     }
 
@@ -501,7 +450,7 @@ app.post("/usar-medalha-extra", async (req, res) => {
       INSERT INTO medalhas_extras_utilizadas (aluno_id, quantidade)
       VALUES ($1, $2)
       `,
-      [aluno_id, 1]
+      [aluno_id, 1],
     );
 
     // 6. Buscar situação atual do aluno
@@ -511,12 +460,11 @@ app.post("/usar-medalha-extra", async (req, res) => {
       FROM alunos
       WHERE id = $1
       `,
-      [aluno_id]
+      [aluno_id],
     );
 
     // 7. Adicionar a medalha ao progresso (somar 1)
-    const totalMedalhas =
-      Number(alunoAtual.rows[0].qtd_medalhas) + 1;
+    const totalMedalhas = Number(alunoAtual.rows[0].qtd_medalhas) + 1;
 
     // 8. Recalcular rank (usando a sua função original que divide por 3)
     const rank = calcularRank(totalMedalhas);
@@ -530,19 +478,18 @@ app.post("/usar-medalha-extra", async (req, res) => {
         qtd_medalhas = $2
       WHERE id = $3
       `,
-      [rank, totalMedalhas, aluno_id]
+      [rank, totalMedalhas, aluno_id],
     );
 
     // 10. Resposta final
     res.json({
       mensagem: "Medalha utilizada com sucesso",
-      saldo_restante: saldo - 1
+      saldo_restante: saldo - 1,
     });
-
   } catch (erro) {
     console.error("Erro ao usar medalha extra:", erro);
     res.status(500).json({
-      erro: "Erro interno ao processar o uso da medalha extra"
+      erro: "Erro interno ao processar o uso da medalha extra",
     });
   }
 });
@@ -557,7 +504,7 @@ app.get("/coordenador/stats/:coordenadorId", async (req, res) => {
     // 1. Contar total de alunos do time (Isso vira o "Y" ou o objetivo máximo)
     const totalQuery = await pool.query(
       `SELECT COUNT(*) as total FROM alunos WHERE coordenador_id = $1`,
-      [coordenadorId]
+      [coordenadorId],
     );
     const totalAlunos = Number(totalQuery.rows[0].total);
 
@@ -568,18 +515,26 @@ app.get("/coordenador/stats/:coordenadorId", async (req, res) => {
       FROM alunos
       WHERE coordenador_id = $1
       `,
-      [coordenadorId]
+      [coordenadorId],
     );
 
     // 3. Calcular quantas medalhas o time tem em cada rank
     // Bronze: Soma de medalhas de todos que estão no Bronze
     // Prata: Soma de medalhas de todos que estão no Prata
     // etc.
-    const ranks = ["Bronze", "Prata", "Ouro", "Platina", "Diamante", "Mestre", "Lendário"];
+    const ranks = [
+      "Bronze",
+      "Prata",
+      "Ouro",
+      "Platina",
+      "Diamante",
+      "Mestre",
+      "Lendário",
+    ];
     let medalhasPorRank = {};
-    ranks.forEach(r => medalhasPorRank[r] = 0);
+    ranks.forEach((r) => (medalhasPorRank[r] = 0));
 
-    alunosQuery.rows.forEach(aluno => {
+    alunosQuery.rows.forEach((aluno) => {
       const rank = aluno.rank_atual || "Bronze";
       if (medalhasPorRank.hasOwnProperty(rank)) {
         medalhasPorRank[rank] += Number(aluno.qtd_medalhas || 0);
@@ -588,15 +543,13 @@ app.get("/coordenador/stats/:coordenadorId", async (req, res) => {
 
     res.json({
       total_alunos: totalAlunos, // Objetivo máximo para subir de nível
-      medalhas_por_rank: medalhasPorRank
+      medalhas_por_rank: medalhasPorRank,
     });
-
   } catch (erro) {
     console.error("Erro ao buscar stats:", erro);
     res.status(500).json({ erro: "Erro ao buscar estatísticas" });
   }
 });
-
 
 // =====================
 // SERVIDOR
