@@ -558,6 +558,52 @@ app.get("/coordenador/stats/:coordenadorId", async (req, res) => {
 });
 
 // =====================
+// ROTA: VERIFICAR STATUS DO MÊS
+// =====================
+app.get("/coordenador/status-mes/:coordenadorId", async (req, res) => {
+  try {
+    const coordenadorId = req.params.coordenadorId;
+    const mes = req.query.mes; // Ex: "Abril"
+
+    if (!mes) {
+      return res.status(400).json({ erro: "Mês não especificado" });
+    }
+
+    // 1. Conta quantos alunos o coordenador tem
+    const totalAlunosQuery = await pool.query(
+      `SELECT COUNT(*) as total FROM alunos WHERE coordenador_id = $1`,
+      [coordenadorId],
+    );
+    const totalAlunos = Number(totalAlunosQuery.rows[0].total);
+
+    // Se não tiver alunos, considera como "realizado" (vazio)
+    if (totalAlunos === 0) {
+      return res.json({ realizado: true });
+    }
+
+    // 2. Conta quantos alunos já têm lançamento para esse mês
+    const lancamentosQuery = await pool.query(
+      `
+      SELECT COUNT(DISTINCT aluno_id) as total
+      FROM resultados_mensais
+      WHERE mes = $1
+      AND aluno_id IN (SELECT id FROM alunos WHERE coordenador_id = $2)
+      `,
+      [mes, coordenadorId],
+    );
+    const lancamentos = Number(lancamentosQuery.rows[0].total);
+
+    // 3. Se a quantidade de lançamentos for igual ao total de alunos, o mês está completo
+    const realizado = lancamentos === totalAlunos;
+
+    res.json({ realizado });
+  } catch (erro) {
+    console.error("Erro ao verificar status do mês:", erro);
+    res.status(500).json({ erro: "Erro ao verificar status do mês" });
+  }
+});
+
+// =====================
 // SERVIDOR
 // =====================
 const PORT = process.env.PORT || 3000;
