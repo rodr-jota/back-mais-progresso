@@ -183,7 +183,8 @@ app.get("/alunos/:coordenadorId", async (req, res) => {
         a.id,
         u.nome,
         a.rank_atual,
-        a.qtd_medalhas
+        a.qtd_medalhas,
+        a.time
       FROM alunos a
       JOIN usuarios u
           ON a.usuario_id = u.id
