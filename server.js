@@ -173,34 +173,36 @@ app.post("/login", async (req, res) => {
   }
 });
 
+// =====================
+// ROTA PARA RANKING E GRÁFICO (Filtra por time, independente do coordenador)
+// =====================
 app.get("/alunos/:coordenadorId", async (req, res) => {
   try {
-    const coordenadorId = req.params.coordenadorId;
     const timeFiltro = req.query.time || "Geral";
 
     let queryAlunos = "";
     let params = [];
 
+    // Se for Geral: busca TODOS os alunos do banco de dados
     if (timeFiltro === "Geral" || timeFiltro === "") {
-      // Se for Geral, busca TODOS os alunos DO COORDENADOR, ordenados por medalhas
       queryAlunos = `
         SELECT a.id, u.nome, a.rank_atual, a.qtd_medalhas, a.time
         FROM alunos a
         JOIN usuarios u ON a.usuario_id = u.id
-        WHERE a.coordenador_id = $1
         ORDER BY a.qtd_medalhas DESC, u.nome
       `;
-      params = [coordenadorId];
-    } else {
-      // Se for um time específico, busca os alunos do coordenador que são DAQUELE time
+      params = [];
+    }
+    // Se for um time específico: busca TODOS os alunos daquele time
+    else {
       queryAlunos = `
         SELECT a.id, u.nome, a.rank_atual, a.qtd_medalhas, a.time
         FROM alunos a
         JOIN usuarios u ON a.usuario_id = u.id
-        WHERE a.coordenador_id = $1 AND a.time = $2
+        WHERE a.time = $1
         ORDER BY a.qtd_medalhas DESC, u.nome
       `;
-      params = [coordenadorId, timeFiltro];
+      params = [timeFiltro];
     }
 
     const resultado = await pool.query(queryAlunos, params);
