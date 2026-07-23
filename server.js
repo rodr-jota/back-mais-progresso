@@ -176,31 +176,37 @@ app.post("/login", async (req, res) => {
 app.get("/alunos/:coordenadorId", async (req, res) => {
   try {
     const coordenadorId = req.params.coordenadorId;
+    const timeFiltro = req.query.time || "Geral";
 
-    const resultado = await pool.query(
-      `
-      SELECT
-        a.id,
-        u.nome,
-        a.rank_atual,
-        a.qtd_medalhas,
-        a.time
-      FROM alunos a
-      JOIN usuarios u
-          ON a.usuario_id = u.id
-      WHERE a.coordenador_id = $1
-      ORDER BY a.qtd_medalhas DESC, u.nome;
-      `,
-      [coordenadorId],
-    );
+    let queryAlunos = "";
+    let params = [];
 
+    if (timeFiltro === "Geral" || timeFiltro === "") {
+      // Se for Geral, busca TODOS os alunos do banco, ordenados por medalhas
+      queryAlunos = `
+        SELECT a.id, u.nome, a.rank_atual, a.qtd_medalhas, a.time
+        FROM alunos a
+        JOIN usuarios u ON a.usuario_id = u.id
+        ORDER BY a.qtd_medalhas DESC, u.nome
+      `;
+      params = [];
+    } else {
+      // Se for um time específico, busca apenas os alunos daquele time, ordenados por medalhas
+      queryAlunos = `
+        SELECT a.id, u.nome, a.rank_atual, a.qtd_medalhas, a.time
+        FROM alunos a
+        JOIN usuarios u ON a.usuario_id = u.id
+        WHERE a.time = $1
+        ORDER BY a.qtd_medalhas DESC, u.nome
+      `;
+      params = [timeFiltro];
+    }
+
+    const resultado = await pool.query(queryAlunos, params);
     res.json(resultado.rows);
   } catch (erro) {
     console.error(erro);
-
-    res.status(500).json({
-      erro: "Erro ao buscar alunos",
-    });
+    res.status(500).json({ erro: "Erro ao buscar alunos" });
   }
 });
 
