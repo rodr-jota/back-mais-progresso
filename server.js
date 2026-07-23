@@ -182,24 +182,25 @@ app.get("/alunos/:coordenadorId", async (req, res) => {
     let params = [];
 
     if (timeFiltro === "Geral" || timeFiltro === "") {
-      // Se for Geral, busca TODOS os alunos do banco, ordenados por medalhas
+      // Se for Geral, busca TODOS os alunos DO COORDENADOR, ordenados por medalhas
       queryAlunos = `
         SELECT a.id, u.nome, a.rank_atual, a.qtd_medalhas, a.time
         FROM alunos a
         JOIN usuarios u ON a.usuario_id = u.id
+        WHERE a.coordenador_id = $1
         ORDER BY a.qtd_medalhas DESC, u.nome
       `;
-      params = [];
+      params = [coordenadorId];
     } else {
-      // Se for um time específico, busca apenas os alunos daquele time, ordenados por medalhas
+      // Se for um time específico, busca os alunos do coordenador que são DAQUELE time
       queryAlunos = `
         SELECT a.id, u.nome, a.rank_atual, a.qtd_medalhas, a.time
         FROM alunos a
         JOIN usuarios u ON a.usuario_id = u.id
-        WHERE a.time = $1
+        WHERE a.coordenador_id = $1 AND a.time = $2
         ORDER BY a.qtd_medalhas DESC, u.nome
       `;
-      params = [timeFiltro];
+      params = [coordenadorId, timeFiltro];
     }
 
     const resultado = await pool.query(queryAlunos, params);
@@ -607,6 +608,29 @@ app.get("/coordenador/status-mes/:coordenadorId", async (req, res) => {
   } catch (erro) {
     console.error("Erro ao verificar status do mês:", erro);
     res.status(500).json({ erro: "Erro ao verificar status do mês" });
+  }
+});
+
+// ── ROTA EXCLUSIVA PARA O SLIDER (BUSCA APENAS OS ALUNOS DO COORDENADOR) ──
+app.get("/coordenador/alunos/:coordenadorId", async (req, res) => {
+  try {
+    const coordenadorId = req.params.coordenadorId;
+
+    const resultado = await pool.query(
+      `
+      SELECT a.id, u.nome, a.rank_atual, a.qtd_medalhas, a.time
+      FROM alunos a
+      JOIN usuarios u ON a.usuario_id = u.id
+      WHERE a.coordenador_id = $1
+      ORDER BY a.qtd_medalhas DESC, u.nome
+      `,
+      [coordenadorId],
+    );
+
+    res.json(resultado.rows);
+  } catch (erro) {
+    console.error(erro);
+    res.status(500).json({ erro: "Erro ao buscar alunos" });
   }
 });
 
