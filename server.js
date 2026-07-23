@@ -188,7 +188,7 @@ app.get("/alunos/:coordenadorId", async (req, res) => {
       JOIN usuarios u
           ON a.usuario_id = u.id
       WHERE a.coordenador_id = $1
-      ORDER BY u.nome;
+      ORDER BY a.qtd_medalhas DESC, u.nome;
       `,
       [coordenadorId],
     );
