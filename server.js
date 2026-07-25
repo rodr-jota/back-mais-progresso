@@ -239,31 +239,61 @@ app.post("/login", async (req, res) => {
 app.get("/alunos", async (req, res) => {
   try {
     const timeFiltro = req.query.time || "Geral";
+    const mesFiltro = req.query.mes || null; // ex: "Abril"
 
-    let queryAlunos = "";
+    let condicaoTime = "";
     let params = [];
 
-    if (timeFiltro === "Geral" || timeFiltro === "") {
-      queryAlunos = `
-        SELECT a.id, u.nome, a.rank_atual, a.qtd_medalhas, a.time
-        FROM alunos a
-        JOIN usuarios u ON a.usuario_id = u.id
-        ORDER BY a.qtd_medalhas DESC, u.nome
-      `;
-      params = [];
-    } else {
-      queryAlunos = `
-        SELECT a.id, u.nome, a.rank_atual, a.qtd_medalhas, a.time
-        FROM alunos a
-        JOIN usuarios u ON a.usuario_id = u.id
-        WHERE a.time = $1
-        ORDER BY a.qtd_medalhas DESC, u.nome
-      `;
+    if (timeFiltro !== "Geral" && timeFiltro !== "") {
+      condicaoTime = "WHERE a.time = $1";
       params = [timeFiltro];
     }
 
+    if (!mesFiltro) {
+      // Sem mês: comportamento original (rank/medalhas acumulados atuais)
+      const queryAlunos = `
+        SELECT a.id, u.nome, a.rank_atual, a.qtd_medalhas, a.time
+        FROM alunos a
+        JOIN usuarios u ON a.usuario_id = u.id
+        ${condicaoTime}
+        ORDER BY a.qtd_medalhas DESC, u.nome
+      `;
+      const resultado = await pool.query(queryAlunos, params);
+      return res.json(resultado.rows);
+    }
+
+    // Com mês: soma acumulada de medalhas até (e incluindo) o mês filtrado
+    const indexMes = MESES_ORDEM.indexOf(mesFiltro);
+    if (indexMes === -1) {
+      return res.status(400).json({ erro: "Mês inválido" });
+    }
+    const mesesAteFiltro = MESES_ORDEM.slice(0, indexMes + 1);
+    const paramIndexMeses = params.length + 1;
+
+    const queryAlunos = `
+      SELECT
+        a.id,
+        u.nome,
+        a.time,
+        COALESCE(SUM(pm.medalhas_ganhas), 0) AS qtd_medalhas
+      FROM alunos a
+      JOIN usuarios u ON a.usuario_id = u.id
+      LEFT JOIN progresso_missoes pm
+        ON pm.aluno_id = a.id AND pm.mes = ANY($${paramIndexMeses}::text[])
+      ${condicaoTime}
+      GROUP BY a.id, u.nome, a.time
+      ORDER BY qtd_medalhas DESC, u.nome
+    `;
+    params.push(mesesAteFiltro);
+
     const resultado = await pool.query(queryAlunos, params);
-    res.json(resultado.rows);
+    const linhas = resultado.rows.map((aluno) => ({
+      ...aluno,
+      qtd_medalhas: Number(aluno.qtd_medalhas),
+      rank_atual: calcularRank(Number(aluno.qtd_medalhas)),
+    }));
+
+    res.json(linhas);
   } catch (erro) {
     console.error(erro);
     res.status(500).json({ erro: "Erro ao buscar alunos" });
