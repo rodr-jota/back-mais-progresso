@@ -46,7 +46,68 @@ function medalhasNoRank(totalMedalhas) {
   return totalMedalhas % 3;
 }
 
-function calcularMissoesAbril(aluno) {
+// =====================
+// LÓGICA DE ORDEM DOS MESES
+// =====================
+const MESES_ORDEM = [
+  "Abril", "Maio", "Junho", "Agosto", "Setembro", "Outubro", "Novembro",
+];
+
+async function contarAlunosDoCoordenador(coordenadorId) {
+  const r = await pool.query(
+    `SELECT COUNT(*) as total FROM alunos WHERE coordenador_id = $1`,
+    [coordenadorId],
+  );
+  return Number(r.rows[0].total);
+}
+
+async function mesCompleto(coordenadorId, mes, totalAlunos) {
+  if (totalAlunos === 0) return true; // coordenador sem alunos: nada pendente
+
+  const r = await pool.query(
+    `
+    SELECT COUNT(DISTINCT aluno_id) as total
+    FROM resultados_mensais
+    WHERE mes = $1
+    AND aluno_id IN (SELECT id FROM alunos WHERE coordenador_id = $2)
+    `,
+    [mes, coordenadorId],
+  );
+  return Number(r.rows[0].total) === totalAlunos;
+}
+
+async function statusMeses(coordenadorId) {
+  const totalAlunos = await contarAlunosDoCoordenador(coordenadorId);
+
+  const mesesCompletos = [];
+  let mesLancavel = MESES_ORDEM[0];
+
+  for (let i = 0; i < MESES_ORDEM.length; i++) {
+    const mes = MESES_ORDEM[i];
+    const completo = await mesCompleto(coordenadorId, mes, totalAlunos);
+
+    if (completo) {
+      mesesCompletos.push(mes);
+      mesLancavel = MESES_ORDEM[i + 1] || null; // null = todos os meses já lançados
+    } else {
+      mesLancavel = mes; // primeiro mês incompleto = o lançável agora
+      break;
+    }
+  }
+
+  const indexLancavel = mesLancavel
+    ? MESES_ORDEM.indexOf(mesLancavel)
+    : MESES_ORDEM.length;
+  const mesesBloqueados = MESES_ORDEM.filter((_, i) => i > indexLancavel);
+
+  return {
+    mes_lancavel: mesLancavel,
+    meses_completos: mesesCompletos,
+    meses_bloqueados: mesesBloqueados,
+  };
+}
+
+function calcularMissoesDoMes(aluno) {
   let medalhas = 0;
 
   // =====================
@@ -211,30 +272,45 @@ app.get("/alunos", async (req, res) => {
 
 app.post("/resultados", async (req, res) => {
   try {
-    const dados = req.body;
+    const { coordenadorId, mes, dados } = req.body;
+
+    if (!coordenadorId || !mes || !Array.isArray(dados)) {
+      return res.status(400).json({
+        erro: "Payload inválido: coordenadorId, mes e dados são obrigatórios",
+      });
+    }
+
+    // 1. Só aceita o mês que realmente está liberado para este coordenador
+    const status = await statusMeses(coordenadorId);
+    if (status.mes_lancavel !== mes) {
+      return res.status(409).json({
+        erro: `Não é possível lançar "${mes}". O mês lançável agora é "${status.mes_lancavel || "nenhum — todos os meses já foram lançados"}".`,
+      });
+    }
+
+    // 2. Proteção extra contra lançamento duplicado (além da regra acima)
+    const idsAlunos = dados.map((a) => Number(a.aluno_id));
+    const jaLancados = await pool.query(
+      `SELECT DISTINCT aluno_id FROM resultados_mensais WHERE mes = $1 AND aluno_id = ANY($2::int[])`,
+      [mes, idsAlunos],
+    );
+    if (jaLancados.rows.length > 0) {
+      return res.status(409).json({
+        erro: "Um ou mais alunos já possuem lançamento para este mês.",
+      });
+    }
 
     for (const aluno of dados) {
       await pool.query(
         `
                 INSERT INTO resultados_mensais
-                (
-                    aluno_id,
-                    mes,
-                    checkin,
-                    tma,
-                    interacao_matinal,
-                    checkin_8,
-                    analise_dados,
-                    olhar_estrategico,
-                    analise_carteira
-                )
-                VALUES
-                ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                (aluno_id, mes, checkin, tma, interacao_matinal, checkin_8, analise_dados, olhar_estrategico, analise_carteira)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
                 RETURNING *
                 `,
         [
           aluno.aluno_id,
-          "Abril",
+          mes,
           aluno.checkin,
           aluno.tma,
           aluno.interacao_matinal,
@@ -244,27 +320,18 @@ app.post("/resultados", async (req, res) => {
           aluno.analise_carteira,
         ],
       );
-      const resultadoMissoes = calcularMissoesAbril(aluno);
+
+      const resultadoMissoes = calcularMissoesDoMes(aluno);
 
       await pool.query(
         `
               INSERT INTO progresso_missoes
-              (
-                  aluno_id,
-                  mes,
-                  lideranca1,
-                  lideranca2,
-                  tino1,
-                  tino2,
-                  extra1,
-                  medalhas_ganhas
-              )
-              VALUES
-              ($1,$2,$3,$4,$5,$6,$7,$8)
+              (aluno_id, mes, lideranca1, lideranca2, tino1, tino2, extra1, medalhas_ganhas)
+              VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
               `,
         [
           aluno.aluno_id,
-          "Abril",
+          mes,
           resultadoMissoes.lideranca1,
           resultadoMissoes.lideranca2,
           resultadoMissoes.tino1,
@@ -273,38 +340,25 @@ app.post("/resultados", async (req, res) => {
           resultadoMissoes.medalhas,
         ],
       );
+
       const soma = await pool.query(
-        `
-            SELECT SUM(medalhas_ganhas) AS total
-            FROM progresso_missoes
-            WHERE aluno_id = $1
-            `,
+        `SELECT SUM(medalhas_ganhas) AS total FROM progresso_missoes WHERE aluno_id = $1`,
         [aluno.aluno_id],
       );
 
       const totalMedalhas = Number(soma.rows[0].total || 0);
       const rank = calcularRank(totalMedalhas);
+
       await pool.query(
-        `
-              UPDATE alunos
-              SET
-                  rank_atual = $1,
-                  qtd_medalhas = $2
-              WHERE id = $3
-              `,
+        `UPDATE alunos SET rank_atual = $1, qtd_medalhas = $2 WHERE id = $3`,
         [rank, totalMedalhas, aluno.aluno_id],
       );
     }
 
-    res.json({
-      mensagem: "Dados salvos com sucesso",
-    });
+    res.json({ mensagem: "Dados salvos com sucesso", mes });
   } catch (erro) {
     console.error(erro);
-
-    res.status(500).json({
-      erro: "Erro ao salvar",
-    });
+    res.status(500).json({ erro: "Erro ao salvar" });
   }
 });
 
@@ -633,50 +687,64 @@ app.get("/coordenador/alunos/:coordenadorId", async (req, res) => {
 });
 
 // =====================
-// ROTA: VERIFICAR STATUS DO MÊS PARA O COORDENADOR
+// ROTA: STATUS DE TODOS OS MESES (fundação p/ filtro e lançamento)
 // =====================
-app.get("/coordenador/status-mes/:coordenadorId", async (req, res) => {
+app.get("/coordenador/meses/:coordenadorId", async (req, res) => {
   try {
     const coordenadorId = req.params.coordenadorId;
-    const mes = req.query.mes; // Ex: "Abril", "Mai"
-
-    if (!mes) {
-      return res.status(400).json({ erro: "Mês não especificado" });
-    }
-
-    // 1. Conta o total de alunos que este coordenador possui
-    const totalQuery = await pool.query(
-      `SELECT COUNT(*) as total FROM alunos WHERE coordenador_id = $1`,
-      [coordenadorId],
-    );
-    const totalAlunos = Number(totalQuery.rows[0].total);
-
-    // Se o coordenador não tiver alunos, consideramos o mês como concluído (vazio)
-    if (totalAlunos === 0) {
-      return res.json({ concluido: true });
-    }
-
-    // 2. Conta quantos alunos deste coordenador já têm dados lançados no mês solicitado
-    const lancamentosQuery = await pool.query(
-      `
-      SELECT COUNT(DISTINCT aluno_id) as total
-      FROM resultados_mensais
-      WHERE mes = $1
-      AND aluno_id IN (SELECT id FROM alunos WHERE coordenador_id = $2)
-      `,
-      [mes, coordenadorId],
-    );
-    const lancamentos = Number(lancamentosQuery.rows[0].total);
-
-    // 3. Verifica se a quantidade de lançamentos é igual ao total de alunos
-    const concluido = lancamentos === totalAlunos;
-
-    res.json({ concluido });
+    const status = await statusMeses(coordenadorId);
+    res.json(status);
   } catch (erro) {
-    console.error("Erro ao verificar status do mês:", erro);
-    res.status(500).json({ erro: "Erro ao verificar status do mês" });
+    console.error("Erro ao buscar status dos meses:", erro);
+    res.status(500).json({ erro: "Erro ao buscar status dos meses" });
   }
 });
+
+// =====================
+// ROTA: VERIFICAR STATUS DO MÊS PARA O COORDENADOR
+// =====================
+// app.get("/coordenador/status-mes/:coordenadorId", async (req, res) => {
+//   try {
+//     const coordenadorId = req.params.coordenadorId;
+//     const mes = req.query.mes; // Ex: "Abril", "Mai"
+
+//     if (!mes) {
+//       return res.status(400).json({ erro: "Mês não especificado" });
+//     }
+
+//     // 1. Conta o total de alunos que este coordenador possui
+//     const totalQuery = await pool.query(
+//       `SELECT COUNT(*) as total FROM alunos WHERE coordenador_id = $1`,
+//       [coordenadorId],
+//     );
+//     const totalAlunos = Number(totalQuery.rows[0].total);
+
+//     // Se o coordenador não tiver alunos, consideramos o mês como concluído (vazio)
+//     if (totalAlunos === 0) {
+//       return res.json({ concluido: true });
+//     }
+
+//     // 2. Conta quantos alunos deste coordenador já têm dados lançados no mês solicitado
+//     const lancamentosQuery = await pool.query(
+//       `
+//       SELECT COUNT(DISTINCT aluno_id) as total
+//       FROM resultados_mensais
+//       WHERE mes = $1
+//       AND aluno_id IN (SELECT id FROM alunos WHERE coordenador_id = $2)
+//       `,
+//       [mes, coordenadorId],
+//     );
+//     const lancamentos = Number(lancamentosQuery.rows[0].total);
+
+//     // 3. Verifica se a quantidade de lançamentos é igual ao total de alunos
+//     const concluido = lancamentos === totalAlunos;
+
+//     res.json({ concluido });
+//   } catch (erro) {
+//     console.error("Erro ao verificar status do mês:", erro);
+//     res.status(500).json({ erro: "Erro ao verificar status do mês" });
+//   }
+// });
 
 // =====================
 // SERVIDOR
