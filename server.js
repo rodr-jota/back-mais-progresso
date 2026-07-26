@@ -107,6 +107,11 @@ async function statusMeses(coordenadorId) {
   };
 }
 
+function horaParaMinutos(horaTexto) {
+  if (!horaTexto) return null;
+  const [h, m] = String(horaTexto).split(":").map(Number);
+  return h * 60 + (m || 0);
+}
 function calcularMissoesDoMes(aluno) {
   let medalhas = 0; // NÃO inclui a medalha extra — ela só conta quando resgatada
 
