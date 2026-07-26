@@ -118,8 +118,8 @@ function calcularMissoesDoMes(aluno) {
   if (lideranca1) medalhas++;
 
   const matinal = Number(aluno.interacao_matinal);
-  const lideranca2 = matinal >= 1 && aluno.checkin_8 <= "08:05";
-  if (lideranca2) medalhas++;
+  const LIMITE_CHECKIN8 = 8 * 60 + 5;
+  const lideranca2 = matinal >= 1 && horaParaMinutos(aluno.checkin_8) <= LIMITE_CHECKIN8;  if (lideranca2) medalhas++;
 
   const tino1 = aluno.analise_dados === true;
   if (tino1) medalhas++;
