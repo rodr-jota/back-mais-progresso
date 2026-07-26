@@ -392,102 +392,82 @@ app.post("/resultados", async (req, res) => {
   }
 });
 
+
+
+async function statusMesesAluno(alunoId) {
+  const mesesCompletos = [];
+
+  for (const mes of MESES_ORDEM) {
+    const r = await pool.query(
+      `SELECT 1 FROM resultados_mensais WHERE aluno_id = $1 AND mes = $2 LIMIT 1`,
+      [alunoId, mes],
+    );
+    if (r.rows.length > 0) {
+      mesesCompletos.push(mes);
+    } else {
+      break; // segue a ordem cronológica: para no primeiro mês sem dados
+    }
+  }
+
+  const ultimoIndex = mesesCompletos.length - 1;
+  const mesesBloqueados = MESES_ORDEM.filter((_, i) => i > ultimoIndex);
+
+  return { meses_completos: mesesCompletos, meses_bloqueados: mesesBloqueados };
+}
+
 app.get("/progresso/:alunoId", async (req, res) => {
   try {
     const alunoId = req.params.alunoId;
+    let mesFiltro = req.query.mes || null;
 
+    // Rank atual NUNCA filtra por mês — regra confirmada
     const aluno = await pool.query(
-      `
-            SELECT
-                rank_atual,
-                qtd_medalhas
-            FROM alunos
-            WHERE id = $1
-            `,
+      `SELECT rank_atual, qtd_medalhas FROM alunos WHERE id = $1`,
       [alunoId],
     );
 
-    const progresso = await pool.query(
-      `
-            SELECT *
-            FROM progresso_missoes
-            WHERE aluno_id = $1
-            AND mes = 'Abril'
-            `,
-      [alunoId],
-    );
+    if (!mesFiltro) {
+      // Sem mês explícito: usa o mês mais recente com dados lançados
+      const { meses_completos } = await statusMesesAluno(alunoId);
+      mesFiltro = meses_completos[meses_completos.length - 1] || null;
+    }
 
-    const resultados = await pool.query(
-      `
-            SELECT *
-            FROM resultados_mensais
-            WHERE aluno_id = $1
-            AND mes = 'Abril'
-            `,
-      [alunoId],
-    );
+    let progresso = null;
+    let resultados = null;
+
+    if (mesFiltro) {
+      const progressoQuery = await pool.query(
+        `SELECT * FROM progresso_missoes WHERE aluno_id = $1 AND mes = $2`,
+        [alunoId, mesFiltro],
+      );
+      const resultadosQuery = await pool.query(
+        `SELECT * FROM resultados_mensais WHERE aluno_id = $1 AND mes = $2`,
+        [alunoId, mesFiltro],
+      );
+      progresso = progressoQuery.rows[0] || null;
+      resultados = resultadosQuery.rows[0] || null;
+    }
 
     res.json({
       aluno: aluno.rows[0],
-      progresso: progresso.rows[0],
-      resultados: resultados.rows[0],
+      progresso,
+      resultados,
+      mes: mesFiltro,
     });
   } catch (erro) {
     console.error(erro);
-
-    res.status(500).json({
-      erro: "Erro ao buscar progresso",
-    });
+    res.status(500).json({ erro: "Erro ao buscar progresso" });
   }
 });
 
-app.get("/progresso/:alunoId", async (req, res) => {
+app.get("/aluno/meses/:alunoId", async (req, res) => {
   try {
     const alunoId = req.params.alunoId;
-
-    // Dados do aluno
-    const aluno = await pool.query(
-      `
-            SELECT
-                rank_atual,
-                qtd_medalhas
-            FROM alunos
-            WHERE id = $1
-            `,
-      [alunoId],
-    );
-
-    // Missões
-    const progresso = await pool.query(
-      `
-            SELECT *
-            FROM progresso_missoes
-            WHERE aluno_id = $1
-            `,
-      [alunoId],
-    );
-
-    // Resultados
-    const resultados = await pool.query(
-      `
-            SELECT *
-            FROM resultados_mensais
-            WHERE aluno_id = $1
-            `,
-      [alunoId],
-    );
-
-    res.json({
-      aluno: aluno.rows[0],
-      progresso: progresso.rows,
-      resultados: resultados.rows,
-    });
+    const status = await statusMesesAluno(alunoId);
+    res.json(status);
   } catch (erro) {
     console.error(erro);
-
-    res.status(500).json({
-      erro: "Erro ao buscar progresso",
-    });
+    res.status(500).json({ erro: "Erro ao buscar meses do aluno" });
   }
 });
 
