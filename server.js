@@ -441,18 +441,20 @@ app.get("/progresso/:alunoId", async (req, res) => {
       resultados = resultadosQuery.rows[0] || null;
     }
 
+    const saldoExtra = await saldoMedalhaExtra(alunoId);
+
     res.json({
       aluno: aluno.rows[0],
       progresso,
       resultados,
       mes: mesFiltro,
+      saldo_medalha_extra: saldoExtra,
     });
   } catch (erro) {
     console.error(erro);
     res.status(500).json({ erro: "Erro ao buscar progresso" });
   }
 });
-
 app.get("/aluno/meses/:alunoId", async (req, res) => {
   try {
     const alunoId = req.params.alunoId;
