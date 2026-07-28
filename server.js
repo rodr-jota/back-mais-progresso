@@ -32,16 +32,19 @@ function calcularRank(totalMedalhas) {
     "Mestre",
     "Lendário",
   ];
+  const limiteAteMestre = 15; // 3 medalhas × 5 ranks (Bronze até Diamante)
 
-  let indice = Math.floor(totalMedalhas / 3);
-
-  if (indice > 6) {
-    indice = 6;
+  let indice;
+  if (totalMedalhas < limiteAteMestre) {
+    indice = Math.floor(totalMedalhas / 3);
+  } else {
+    const alemDoMestre = totalMedalhas - limiteAteMestre;
+    indice = alemDoMestre >= 5 ? 6 : 5; // precisa de 5 (não 3) pra sair de Mestre
   }
 
+  if (indice > 6) indice = 6;
   return ranks[indice];
 }
-
 function medalhasNoRank(totalMedalhas) {
   return totalMedalhas % 3;
 }
