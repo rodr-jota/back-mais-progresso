@@ -50,7 +50,13 @@ function medalhasNoRank(totalMedalhas) {
 // LÓGICA DE ORDEM DOS MESES
 // =====================
 const MESES_ORDEM = [
-  "Abril", "Maio", "Junho", "Agosto", "Setembro", "Outubro", "Novembro",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
 ];
 
 async function contarAlunosDoCoordenador(coordenadorId) {
@@ -112,7 +118,6 @@ function horaParaMinutos(horaTexto) {
   const [h, m] = String(horaTexto).split(":").map(Number);
   return h * 60 + (m || 0);
 }
-console.log("OI")
 function calcularMissoesDoMes(aluno) {
   let medalhas = 0; // NÃO inclui a medalha extra — ela só conta quando resgatada
 
@@ -125,7 +130,9 @@ function calcularMissoesDoMes(aluno) {
 
   const matinal = Number(aluno.interacao_matinal);
   const LIMITE_CHECKIN8 = 8 * 60 + 5;
-  const lideranca2 = matinal >= 1 && horaParaMinutos(aluno.checkin_8) <= LIMITE_CHECKIN8;  if (lideranca2) medalhas++;
+  const lideranca2 =
+    matinal >= 1 && horaParaMinutos(aluno.checkin_8) <= LIMITE_CHECKIN8;
+  if (lideranca2) medalhas++;
 
   const tino1 = aluno.analise_dados === true;
   if (tino1) medalhas++;
@@ -229,16 +236,24 @@ app.get("/alunos", async (req, res) => {
     }
 
     if (!mesFiltro) {
-      // Sem mês: comportamento original (rank/medalhas acumulados atuais)
       const queryAlunos = `
-        SELECT a.id, u.nome, a.rank_atual, a.qtd_medalhas, a.time
-        FROM alunos a
-        JOIN usuarios u ON a.usuario_id = u.id
-        ${condicaoTime}
-        ORDER BY a.qtd_medalhas DESC, u.nome
-      `;
+    SELECT a.id, u.nome, a.rank_atual, a.qtd_medalhas, a.time
+    FROM alunos a
+    JOIN usuarios u ON a.usuario_id = u.id
+    ${condicaoTime}
+    ORDER BY a.qtd_medalhas DESC, u.nome
+  `;
       const resultado = await pool.query(queryAlunos, params);
-      return res.json(resultado.rows);
+
+      const ids = resultado.rows.map((a) => a.id);
+      const saldos = await saldosMedalhaExtraEmLote(ids);
+
+      const linhasComSaldo = resultado.rows.map((aluno) => ({
+        ...aluno,
+        saldo_medalha_extra: saldos[aluno.id] || 0,
+      }));
+
+      return res.json(linhasComSaldo);
     }
 
     // Com mês: soma acumulada de medalhas até (e incluindo) o mês filtrado
@@ -272,7 +287,15 @@ app.get("/alunos", async (req, res) => {
       rank_atual: calcularRank(Number(aluno.qtd_medalhas)),
     }));
 
-    res.json(linhas);
+    const ids = linhas.map((a) => a.id);
+    const saldos = await saldosMedalhaExtraEmLote(ids);
+
+    const linhasComSaldo = linhas.map((aluno) => ({
+      ...aluno,
+      saldo_medalha_extra: saldos[aluno.id] || 0,
+    }));
+
+    res.json(linhasComSaldo);
   } catch (erro) {
     console.error(erro);
     res.status(500).json({ erro: "Erro ao buscar alunos" });
@@ -371,8 +394,6 @@ app.post("/resultados", async (req, res) => {
   }
 });
 
-
-
 async function statusMesesAluno(alunoId) {
   const mesesCompletos = [];
 
@@ -407,6 +428,38 @@ async function saldoMedalhaExtra(alunoId) {
 
   const total = Number(ganhas.rows[0].total) - Number(usadas.rows[0].total);
   return Math.max(total, 0); // nunca negativo, por segurança
+}
+async function saldosMedalhaExtraEmLote(idsAlunos) {
+  if (idsAlunos.length === 0) return {};
+
+  const ganhas = await pool.query(
+    `SELECT aluno_id, COUNT(*) AS total
+     FROM progresso_missoes
+     WHERE extra1 = true AND aluno_id = ANY($1::int[])
+     GROUP BY aluno_id`,
+    [idsAlunos],
+  );
+  const usadas = await pool.query(
+    `SELECT aluno_id, COALESCE(SUM(quantidade), 0) AS total
+     FROM medalhas_extras_utilizadas
+     WHERE aluno_id = ANY($1::int[])
+     GROUP BY aluno_id`,
+    [idsAlunos],
+  );
+
+  const mapaGanhas = {};
+  ganhas.rows.forEach((r) => (mapaGanhas[r.aluno_id] = Number(r.total)));
+
+  const mapaUsadas = {};
+  usadas.rows.forEach((r) => (mapaUsadas[r.aluno_id] = Number(r.total)));
+
+  const saldos = {};
+  idsAlunos.forEach((id) => {
+    const saldo = (mapaGanhas[id] || 0) - (mapaUsadas[id] || 0);
+    saldos[id] = Math.max(saldo, 0);
+  });
+
+  return saldos;
 }
 
 app.get("/progresso/:alunoId", async (req, res) => {
@@ -550,7 +603,10 @@ app.post("/usar-medalha-extra", async (req, res) => {
 
     const novoSaldo = await saldoMedalhaExtra(aluno_id);
 
-    res.json({ mensagem: "Medalha usada com sucesso", saldo_restante: novoSaldo });
+    res.json({
+      mensagem: "Medalha usada com sucesso",
+      saldo_restante: novoSaldo,
+    });
   } catch (erro) {
     console.error(erro);
     res.status(500).json({ erro: "Erro ao usar medalha extra" });
