@@ -112,6 +112,7 @@ function horaParaMinutos(horaTexto) {
   const [h, m] = String(horaTexto).split(":").map(Number);
   return h * 60 + (m || 0);
 }
+console.log("OI")
 function calcularMissoesDoMes(aluno) {
   let medalhas = 0; // NÃO inclui a medalha extra — ela só conta quando resgatada
 
