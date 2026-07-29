@@ -1,13 +1,16 @@
 const express = require("express");
+const path = require("path");
 const cors = require("cors");
 const pool = require("./db");
 
 const app = express();
+const projectRoot = path.resolve(__dirname, "..", "..");
 
 //Middleware
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static(projectRoot));
 
 // Teste de conexão com banco
 
@@ -44,9 +47,6 @@ function calcularRank(totalMedalhas) {
 
   if (indice > 6) indice = 6;
   return ranks[indice];
-}
-function medalhasNoRank(totalMedalhas) {
-  return totalMedalhas % 3;
 }
 
 // =====================
@@ -161,9 +161,9 @@ function calcularMissoesDoMes(aluno) {
 // ROTAS
 // =====================
 
-// Teste
+// Página inicial
 app.get("/", (req, res) => {
-  res.send("Servidor funcionando");
+  res.sendFile(path.join(projectRoot, "index.html"));
 });
 
 // LOGIN (VERSÃO DE TESTE)
@@ -305,6 +305,44 @@ app.get("/alunos", async (req, res) => {
   }
 });
 
+app.get("/coordenador/resultados/:coordenadorId", async (req, res) => {
+  try {
+    const coordenadorId = req.params.coordenadorId;
+    const mes = req.query.mes;
+
+    if (!mes) {
+      return res.status(400).json({ erro: "Mês não especificado" });
+    }
+
+    const resultado = await pool.query(
+      `
+      SELECT
+        a.id AS aluno_id,
+        u.nome,
+        rm.checkin,
+        rm.tma,
+        rm.interacao_matinal,
+        rm.checkin_8,
+        rm.analise_dados,
+        rm.olhar_estrategico,
+        rm.analise_carteira
+      FROM alunos a
+      JOIN usuarios u ON a.usuario_id = u.id
+      LEFT JOIN resultados_mensais rm
+        ON rm.aluno_id = a.id AND rm.mes = $2
+      WHERE a.coordenador_id = $1
+      ORDER BY u.nome
+      `,
+      [coordenadorId, mes],
+    );
+
+    res.json(resultado.rows);
+  } catch (erro) {
+    console.error(erro);
+    res.status(500).json({ erro: "Erro ao buscar dados do mês" });
+  }
+});
+
 app.post("/resultados", async (req, res) => {
   try {
     const { coordenadorId, mes, dados } = req.body;
@@ -323,40 +361,65 @@ app.post("/resultados", async (req, res) => {
       });
     }
 
-    // 2. Proteção extra contra lançamento duplicado (além da regra acima)
-    const idsAlunos = dados.map((a) => Number(a.aluno_id));
-    const jaLancados = await pool.query(
-      `SELECT DISTINCT aluno_id FROM resultados_mensais WHERE mes = $1 AND aluno_id = ANY($2::int[])`,
-      [mes, idsAlunos],
-    );
-    if (jaLancados.rows.length > 0) {
-      return res.status(409).json({
-        erro: "Um ou mais alunos já possuem lançamento para este mês.",
-      });
-    }
-
     for (const aluno of dados) {
-      await pool.query(
-        `
-                INSERT INTO resultados_mensais
-                (aluno_id, mes, checkin, tma, interacao_matinal, checkin_8, analise_dados, olhar_estrategico, analise_carteira)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-                RETURNING *
-                `,
-        [
-          aluno.aluno_id,
-          mes,
-          aluno.checkin,
-          aluno.tma,
-          aluno.interacao_matinal,
-          aluno.checkin_8,
-          aluno.analise_dados,
-          aluno.olhar_estrategico,
-          aluno.analise_carteira,
-        ],
+      const existente = await pool.query(
+        `SELECT 1 FROM resultados_mensais WHERE aluno_id = $1 AND mes = $2 LIMIT 1`,
+        [aluno.aluno_id, mes],
       );
 
+      if (existente.rows.length > 0) {
+        await pool.query(
+          `
+          UPDATE resultados_mensais
+          SET checkin = $3,
+              tma = $4,
+              interacao_matinal = $5,
+              checkin_8 = $6,
+              analise_dados = $7,
+              olhar_estrategico = $8,
+              analise_carteira = $9
+          WHERE aluno_id = $1 AND mes = $2
+          `,
+          [
+            aluno.aluno_id,
+            mes,
+            aluno.checkin,
+            aluno.tma,
+            aluno.interacao_matinal,
+            aluno.checkin_8,
+            aluno.analise_dados,
+            aluno.olhar_estrategico,
+            aluno.analise_carteira,
+          ],
+        );
+      } else {
+        await pool.query(
+          `
+                  INSERT INTO resultados_mensais
+                  (aluno_id, mes, checkin, tma, interacao_matinal, checkin_8, analise_dados, olhar_estrategico, analise_carteira)
+                  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                  RETURNING *
+                  `,
+          [
+            aluno.aluno_id,
+            mes,
+            aluno.checkin,
+            aluno.tma,
+            aluno.interacao_matinal,
+            aluno.checkin_8,
+            aluno.analise_dados,
+            aluno.olhar_estrategico,
+            aluno.analise_carteira,
+          ],
+        );
+      }
+
       const resultadoMissoes = calcularMissoesDoMes(aluno);
+
+      await pool.query(
+        `DELETE FROM progresso_missoes WHERE aluno_id = $1 AND mes = $2`,
+        [aluno.aluno_id, mes],
+      );
 
       await pool.query(
         `
@@ -520,52 +583,6 @@ app.get("/aluno/meses/:alunoId", async (req, res) => {
   } catch (erro) {
     console.error(erro);
     res.status(500).json({ erro: "Erro ao buscar meses do aluno" });
-  }
-});
-
-app.get("/progresso/:alunoId", async (req, res) => {
-  try {
-    const alunoId = req.params.alunoId;
-    let mesFiltro = req.query.mes || null;
-
-    const aluno = await pool.query(
-      `SELECT rank_atual, qtd_medalhas FROM alunos WHERE id = $1`,
-      [alunoId],
-    );
-
-    if (!mesFiltro) {
-      const { meses_completos } = await statusMesesAluno(alunoId);
-      mesFiltro = meses_completos[meses_completos.length - 1] || null;
-    }
-
-    let progresso = null;
-    let resultados = null;
-
-    if (mesFiltro) {
-      const progressoQuery = await pool.query(
-        `SELECT * FROM progresso_missoes WHERE aluno_id = $1 AND mes = $2`,
-        [alunoId, mesFiltro],
-      );
-      const resultadosQuery = await pool.query(
-        `SELECT * FROM resultados_mensais WHERE aluno_id = $1 AND mes = $2`,
-        [alunoId, mesFiltro],
-      );
-      progresso = progressoQuery.rows[0] || null;
-      resultados = resultadosQuery.rows[0] || null;
-    }
-
-    const saldoExtra = await saldoMedalhaExtra(alunoId);
-
-    res.json({
-      aluno: aluno.rows[0],
-      progresso,
-      resultados,
-      mes: mesFiltro,
-      saldo_medalha_extra: saldoExtra,
-    });
-  } catch (erro) {
-    console.error(erro);
-    res.status(500).json({ erro: "Erro ao buscar progresso" });
   }
 });
 
